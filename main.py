@@ -35,40 +35,62 @@ config = {
 
 mem_client=  Memory.from_config(config)
 client = OpenAI()
+conversation_history = []
 
 def chat():
-    print("Welcome to the chat! Type 'ctr+c' to quit.")
-    while True:
-        user_input = input("input: ")
-
-        relevent_memory = mem_client.search(query=user_input, user_id="gaurav")
-        
-        memories = [
-            f"ID: {mem.get('id')}, Memory: {mem.get('memory')}" 
-            for mem in relevent_memory.get("results", [])
-        ]
-
-        # print("memories:", memories)
-        
-        SYSTEM_PROMPT = f""" 
-            You are a memory aware assistant which responds to user with context.
-            You are given relevant memories from the past interactions about the user.
+    try:
+        print("Welcome to the chat! Type 'ctr+c' to quit.")
+        while True:
+            user_input = input("input: ")
             
-            Memory of user:
-           {json.dumps(memories)}
+            # --- 1️⃣ Search memory from Mem0 ---
+            relevent_memory = mem_client.search(query=user_input, user_id="gaurav")
+            
+            memories = [
+                f"ID: {mem.get('id')}, Memory: {mem.get('memory')}" 
+                for mem in relevent_memory.get("results", [])
+            ]
 
-        """
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_input}],
-        )
-        print("Bot:", response.choices[0].message.content)
+            # print("memories:", memories)
+            
+            # --- 2️⃣ Keep only last 5 messages for context ---
+            recent_context = conversation_history[-5:]  
 
-        mem_client.add([
-            {"role": "user", "content": user_input},
-            {"role": "assistant", "content": response.choices[0].message.content }
-        ],user_id="gaurav")
+            # --- 3️⃣ System Prompt ---
+            SYSTEM_PROMPT = f""" 
+                You are a memory aware assistant which responds to user with context.
+                You are given relevant memories from the past interactions about the user.
+                
+                Memory of user:
+            {json.dumps(memories)}
+
+            """
+            
+            # --- 4️⃣ Build final messages for LLM ---
+            messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+            messages.extend(recent_context)
+            messages.append({"role": "user", "content": user_input})
+
+            # --- 5️⃣ Get LLM response ---
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages,
+            )
+
+            reply = response.choices[0].message.content
+            print("Bot:", reply)
+
+            # --- 6️⃣ Save to conversation history ---
+            conversation_history.append({"role": "user", "content": user_input})
+            conversation_history.append({"role": "assistant", "content": reply})
+
+            # --- 7️⃣ Update long-term memory ---
+            mem_client.add([
+                {"role": "user", "content": user_input},
+                {"role": "assistant", "content": response.choices[0].message.content }
+            ],user_id="gaurav")
+
+    except KeyboardInterrupt:
+        print("\n\n👋 Chat ended. Goodbye!")
 
 chat()
