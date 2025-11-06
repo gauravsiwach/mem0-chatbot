@@ -27,7 +27,7 @@ config = {
     "vector_store": {
        "provider": "qdrant",
        "config": {
-           "url": "https://2c2ac114-a259-42c6-ade7-bb35cb0ac092.us-east4-0.gcp.cloud.qdrant.io:6333",
+           "url": os.getenv("QDRANT_URL"),
            "api_key": os.getenv("QDRANT_API_KEY")
        }
     }
